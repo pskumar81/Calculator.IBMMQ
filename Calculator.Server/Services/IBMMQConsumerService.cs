@@ -35,9 +35,8 @@ public class IBMMQConsumerService : IIBMMQConsumerService
     {
         try
         {
-            _logger.LogInformation("IBM MQ queues setup completed (simulated)");
-            _logger.LogInformation("Request Queue: {RequestQueue}", _config.RequestQueueName);
-            _logger.LogInformation("Response Queue: {ResponseQueue}", _config.ResponseQueueName);
+            _logger.LogInformation("IBM MQ queues configured - Request: {RequestQueue}, Response: {ResponseQueue}", 
+                _config.RequestQueueName, _config.ResponseQueueName);
         }
         catch (Exception ex)
         {
@@ -114,8 +113,6 @@ public class IBMMQConsumerService : IIBMMQConsumerService
         
         try
         {
-            _logger.LogDebug("Received message: {Message}", messageText);
-
             var request = JsonSerializer.Deserialize<CalculationRequest>(messageText);
             if (request == null)
             {

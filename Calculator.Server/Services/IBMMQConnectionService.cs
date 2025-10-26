@@ -137,8 +137,6 @@ public class IBMMQConnectionService : IIBMMQConnectionService, IDisposable
 
         try
         {
-            _logger.LogDebug("📤 Sending message to queue: {QueueName} (Length: {Length})", queueName, message.Length);
-
             // Open the queue for output if not already open
             if (!_openQueues.ContainsKey(queueName))
             {
@@ -154,8 +152,6 @@ public class IBMMQConnectionService : IIBMMQConnectionService, IDisposable
 
             var putMessageOptions = new MQPutMessageOptions();
             _openQueues[queueName].Put(mqMessage, putMessageOptions);
-
-            _logger.LogDebug("✅ Message sent to queue: {QueueName}", queueName);
         }
         catch (Exception ex)
         {
@@ -176,16 +172,12 @@ public class IBMMQConnectionService : IIBMMQConnectionService, IDisposable
 
         try
         {
-            _logger.LogDebug("📥 Checking for messages on queue: {QueueName}", queueName);
-
             // Open the queue for input if not already open
             if (!_openQueues.ContainsKey(queueName))
             {
-                _logger.LogDebug("Opening queue {QueueName} for input", queueName);
                 int openOptions = MQC.MQOO_INPUT_AS_Q_DEF | MQC.MQOO_FAIL_IF_QUIESCING;
                 var queue = _queueManager!.AccessQueue(queueName, openOptions);
                 _openQueues[queueName] = queue;
-                _logger.LogDebug("Queue {QueueName} opened successfully", queueName);
             }
 
             // Try to get a message with no wait
@@ -199,7 +191,7 @@ public class IBMMQConnectionService : IIBMMQConnectionService, IDisposable
             {
                 _openQueues[queueName].Get(mqMessage, getMessageOptions);
                 message = mqMessage.ReadString(mqMessage.MessageLength);
-                _logger.LogDebug("✅ Message received from queue: {QueueName} (Length: {Length})", queueName, message.Length);
+                _logger.LogInformation("Message received from queue: {QueueName}", queueName);
                 return true;
             }
             catch (MQException mqEx)
