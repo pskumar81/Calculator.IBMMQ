@@ -479,6 +479,205 @@ Future enhancement will include Docker containers for both client and server app
 - Implement dead letter queue handling
 - Set up log aggregation and monitoring
 
+## 🔮 Future Improvements
+
+This section outlines potential enhancements to make the system more production-ready and robust.
+
+### 🔴 High Priority
+
+#### 1. Retry Logic & Resilience
+**Current State**: No retry mechanism for IBM MQ connection failures  
+**Issue**: If IBM MQ is temporarily unavailable, the application fails immediately  
+**Recommendation**:
+- Implement **Polly** library for retry policies with exponential backoff
+- Add circuit breaker pattern for MQ connections
+- Implement automatic reconnection logic in `IBMMQConnectionService`
+- Handle transient failures gracefully
+
+**Example Implementation**:
+```csharp
+services.AddSingleton<IAsyncPolicy>(provider =>
+{
+    return Policy
+        .Handle<MQException>()
+        .WaitAndRetryAsync(
+            retryCount: 3,
+            sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+            onRetry: (exception, timeSpan, retry, ctx) =>
+            {
+                logger.LogWarning($"Retry {retry} after {timeSpan.TotalSeconds}s due to: {exception.Message}");
+            });
+});
+```
+
+#### 2. Health Checks
+**Current State**: No health check endpoints  
+**Missing**: No way to monitor if server is processing messages or if MQ connection is healthy  
+**Recommendation**:
+- Add ASP.NET Core Health Checks with custom MQ health check
+- Expose `/health` endpoint showing:
+  - IBM MQ connection status
+  - Queue depths and capacity
+  - Last message processed timestamp
+  - Service availability and uptime
+- Integrate with monitoring tools (Azure Monitor, Prometheus, etc.)
+
+**Example Implementation**:
+```csharp
+services.AddHealthChecks()
+    .AddCheck<IBMMQHealthCheck>("ibmmq")
+    .AddCheck<QueueDepthHealthCheck>("queue_depth");
+
+app.MapHealthChecks("/health");
+```
+
+### 🟡 Medium Priority
+
+#### 3. Metrics & Monitoring
+**Current State**: Only basic logging, no metrics collection  
+**Recommendation**:
+- Add **Application Insights** or **Prometheus** metrics:
+  - Messages processed per second
+  - Average processing time per operation
+  - Error rates and failure types
+  - Queue depths over time
+  - Connection failures and retry counts
+- Implement distributed tracing with correlation IDs
+- Add performance counters for system resources
+
+#### 4. Dead Letter Queue Handling
+**Current State**: DLQ created but not actively utilized  
+**Issue**: Failed messages are lost without proper handling  
+**Recommendation**:
+- Implement automatic DLQ routing for:
+  - JSON deserialization failures
+  - Business logic exceptions
+  - Maximum retry exhaustion
+- Add DLQ monitoring and alerting
+- Create admin tool for DLQ message inspection and reprocessing
+- Log detailed error context with each DLQ message
+
+#### 5. Integration Tests
+**Current State**: Only unit tests for `CalculatorService`  
+**Missing**: No integration tests with real IBM MQ, no end-to-end tests  
+**Recommendation**:
+- Add **Testcontainers** for IBM MQ in integration tests
+- Test complete message flow: Client → MQ → Server → MQ → Client
+- Test error scenarios (timeout, connection loss, invalid messages)
+- Add load testing for throughput validation
+- Test security and authentication scenarios
+
+**Example Test Structure**:
+```csharp
+public class IntegrationTests : IAsyncLifetime
+{
+    private readonly IBMMQContainer _mqContainer = new IBMMQBuilder()
+        .WithQueueManager("TEST_QM")
+        .Build();
+
+    public async Task InitializeAsync() => await _mqContainer.StartAsync();
+    
+    [Fact]
+    public async Task Should_ProcessCalculationRequest_Successfully()
+    {
+        // Arrange, Act, Assert with real MQ container
+    }
+}
+```
+
+#### 6. Security Enhancements
+**Current State**: Development mode with minimal authentication  
+**Issues**: Passwords in config files, no TLS/SSL, overly permissive queue access  
+**Recommendation**:
+- Use **Azure Key Vault** or **HashiCorp Vault** for secrets management
+- Implement TLS/SSL for production MQ connections
+- Apply principle of least privilege for queue permissions
+- Add user-specific authentication for production channels
+- Implement API key or JWT authentication for client applications
+- Enable MQ channel security with certificate-based auth
+
+#### 7. Message Schema Versioning
+**Current State**: No versioning strategy for messages  
+**Issue**: Breaking changes will break client-server compatibility  
+**Recommendation**:
+- Add `Version` property to `CalculationRequest` and `CalculationResponse`
+- Implement backward compatibility handling
+- Support multiple message versions simultaneously
+- Document API contract changes in release notes
+- Use semantic versioning for message schemas
+
+### 🟢 Low Priority
+
+#### 8. Configuration Validation
+**Current State**: No validation of configuration at startup  
+**Issue**: Runtime failures if configuration is invalid or missing  
+**Recommendation**:
+- Add `IOptions<T>` validation with data annotations
+- Validate configuration at startup using `IValidateOptions<T>`
+- Fail fast with clear error messages
+- Provide configuration examples and templates
+
+**Example**:
+```csharp
+[Required]
+[MinLength(1)]
+public string QueueManagerName { get; set; } = string.Empty;
+
+services.AddOptions<IBMMQConfiguration>()
+    .Bind(configuration.GetSection("IBMMQ"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+```
+
+#### 9. Performance Optimization
+**Current State**: Functional but not optimized for high throughput  
+**Opportunities**:
+- Optimize queue access patterns (reduce open/close operations)
+- Implement connection pooling for MQ connections
+- Add message batching for high-volume scenarios
+- Use async/await patterns more effectively
+- Add performance benchmarks and profiling
+
+#### 10. Enhanced Docker Configuration
+**Current State**: Basic Docker setup working  
+**Recommendations**:
+- Add Docker secrets for sensitive configuration
+- Implement container resource limits (CPU, memory)
+- Add container restart policies
+- Use Docker health checks
+- Create separate Docker compose files for dev/prod
+- Add volume management for persistent data
+
+## 📊 Implementation Priority Matrix
+
+| Priority | Improvement | Effort | Impact | Quick Win |
+|----------|------------|--------|--------|-----------|
+| 🔴 HIGH | Retry Logic & Resilience | Medium | High | ✅ |
+| 🔴 HIGH | Health Checks | Low | High | ✅ |
+| 🟡 MEDIUM | Metrics & Monitoring | Medium | Medium | |
+| 🟡 MEDIUM | DLQ Handling | Low | High | ✅ |
+| 🟡 MEDIUM | Integration Tests | High | High | |
+| 🟡 MEDIUM | Security Enhancements | Medium | High | |
+| 🟢 LOW | Config Validation | Low | Low | ✅ |
+| 🟢 LOW | Message Versioning | Low | Medium | |
+| 🟢 LOW | Performance Optimization | Medium | Low | |
+| 🟢 LOW | Docker Improvements | Low | Low | |
+
+**Quick Wins** (✅) can be implemented in 1-2 hours and provide immediate value.
+
+## 🚀 Getting Started with Improvements
+
+If you'd like to contribute to these improvements:
+
+1. Review the priority matrix above
+2. Pick an improvement that matches your skill level
+3. Create an issue describing your implementation plan
+4. Fork the repository and create a feature branch
+5. Implement with tests and documentation
+6. Submit a pull request
+
+We welcome contributions that make this system more production-ready!
+
 ## Contributing
 
 1. Fork the repository
