@@ -8,7 +8,7 @@ This project demonstrates production-ready messaging architecture using **IBM MQ
 
 ## 🏗️ Architecture
 
-The solution consists of four main projects:
+The solution consists of three main projects:
 
 ### Calculator.Server
 - **Purpose**: Background service that processes calculation requests
@@ -30,11 +30,6 @@ The solution consists of four main projects:
   - Timeout handling for server responses
   - User-friendly error reporting
 
-### Calculator.Shared
-- **Purpose**: Shared models and utilities
-- **Technology**: .NET 9.0 Class Library
-- **Features**: Common data models and IBM MQ simulation for testing
-
 ### Calculator.Tests
 - **Purpose**: Unit tests for core calculation logic
 - **Technology**: xUnit testing framework with Moq
@@ -42,23 +37,24 @@ The solution consists of four main projects:
 
 ## ✨ Features
 
-- **🔗 Real IBM MQ Integration**: Uses actual IBM MQ client libraries (`IBM.MQSeries.Client`)
+- **🔗 Real IBM MQ Integration**: Uses actual IBM MQ client libraries (`IBMMQDotnetClient v9.4.4`)
 - **🐳 Docker Support**: Complete Docker Compose setup with IBM MQ container
 - **🧮 Mathematical Operations**: Addition, subtraction, multiplication, and division
 - **🛡️ Error Handling**: Division by zero protection and comprehensive IBM MQ error reporting
 - **🔍 Correlation Tracking**: Request/response correlation for debugging and monitoring
-- **⚙️ Configuration**: Flexible configuration for different environments (Local, Docker)
+- **⚙️ Configuration**: Flexible configuration using appsettings.json
 - **📋 Logging**: Structured logging with configurable levels
 - **🧪 Testing**: Comprehensive unit test suite with high coverage
 
-## 🚀 Quick Start with Docker
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- .NET 9.0 SDK (for local development)
+- **Docker and Docker Compose** - For running IBM MQ
+- **.NET 9.0 SDK** - For running the Calculator applications
+- **Git** - For cloning the repository
 
-### Option 1: Full Docker Setup (Recommended)
+### Setup Steps
 
 1. **Clone the repository**
    ```bash
@@ -66,137 +62,200 @@ The solution consists of four main projects:
    cd Calculator.IBMMQ
    ```
 
-2. **Start the entire system with Docker Compose**
+2. **Start IBM MQ with Docker**
    ```bash
-   docker-compose up --build
+   docker-compose up -d ibm-mq
    ```
 
-   This will:
-   - Start IBM MQ container with Queue Manager `CALC_QM`
-   - Create necessary queues (`CALC.REQUEST`, `CALC.RESPONSE`)
-   - Build and start the Calculator Server
-   - Build and start the Calculator Client
+3. **Run the IBM MQ Setup Script**
+   
+   This script creates the required queues and configures security automatically.
 
-3. **Access IBM MQ Web Console**
-   - URL: https://localhost:9443/ibmmq/console
-   - Username: `admin`
-   - Password: `passw0rd`
-
-### Option 2: IBM MQ in Docker + Local .NET Applications
-
-1. **Start only IBM MQ with Docker**
-   ```bash
-   docker-compose up ibm-mq
+   **Windows (PowerShell):**
+   ```powershell
+   .\docker\setup-ibmmq.ps1
    ```
 
-2. **Wait for IBM MQ to be ready** (check container logs)
+   **Linux/Mac (Bash):**
    ```bash
-   docker-compose logs -f ibm-mq
+   chmod +x docker/setup-ibmmq.sh
+   ./docker/setup-ibmmq.sh
    ```
 
-3. **Run applications locally**
+   The script will:
+   - Create `CALC.REQUEST` and `CALC.RESPONSE` queues
+   - Configure channel authentication for `DEV.APP.SVRCONN`
+   - Set up proper queue permissions
+   - Verify the setup
+
+4. **Run the applications**
+   
+   **Terminal 1 - Start the Server:**
    ```bash
-   # Terminal 1: Start the server
    cd Calculator.Server
    dotnet run
+   ```
 
-   # Terminal 2: Start the client
+   **Terminal 2 - Start the Client:**
+   ```bash
    cd Calculator.Client
    dotnet run
    ```
 
+5. **Test the calculator**
+   - Choose an operation (Add, Subtract, Multiply, Divide)
+   - Enter two numbers
+   - See the result returned via IBM MQ!
+
+### Access IBM MQ Web Console
+
+- **URL**: https://localhost:9443/ibmmq/console
+- **Username**: `admin`
+- **Password**: `passw0rd`
+- Monitor queues, messages, and connections in real-time
+
 ## 🔧 Configuration
 
-### IBM MQ Settings
+### IBM MQ Connection Settings
 
-The applications use different configurations for Local vs Docker environments:
+The applications connect to IBM MQ using these settings:
 
-#### Local Development (`appsettings.json`)
 ```json
 {
   "IBMMQ": {
     "QueueManagerName": "CALC_QM",
     "HostName": "localhost",
     "Port": 1414,
-    "Channel": "CALC.SVRCONN",
-    "UserName": "app",
-    "Password": "passw0rd",
+    "Channel": "DEV.APP.SVRCONN",
     "RequestQueueName": "CALC.REQUEST",
     "ResponseQueueName": "CALC.RESPONSE"
   }
 }
 ```
 
-#### Docker Environment (`appsettings.Docker.json`)
-```json
-{
-  "IBMMQ": {
-    "QueueManagerName": "CALC_QM",
-    "HostName": "calculator-ibm-mq",
-    "Port": 1414,
-    "Channel": "CALC.SVRCONN",
-    "UserName": "app", 
-    "Password": "passw0rd",
-    "RequestQueueName": "CALC.REQUEST",
-    "ResponseQueueName": "CALC.RESPONSE"
-  }
-}
+**Key Points:**
+- **Queue Manager**: `CALC_QM` (created automatically by Docker)
+- **Channel**: `DEV.APP.SVRCONN` (IBM MQ development channel with relaxed auth)
+- **Port**: `1414` (standard IBM MQ port)
+- **Transport**: Uses `TRANSPORT_MQSERIES_MANAGED` for cross-platform compatibility
+- **Authentication**: No credentials required for development mode
+
+### Docker Environment Variables
+
+When running in Docker, the `docker-compose.yml` configures:
+
+```yaml
+environment:
+  - LICENSE=accept
+  - MQ_QMGR_NAME=CALC_QM
+  - MQ_DEV=true              # Enables development mode
+  - MQ_ADMIN_PASSWORD=passw0rd
 ```
 
-## 🏃‍♂️ Local Development Setup
+## 🏗️ Architecture
 
-### Prerequisites
+See the [C4 Architecture Diagrams](docs/architecture-c4.md) for detailed system architecture including:
+- System Context Diagram
+- Container Diagram
+- Component Diagrams (Client & Server)
+- Deployment Diagram
+- Message Flow Documentation
 
-- .NET 9.0 SDK
-- Docker (for IBM MQ)
+## 🧪 Running Tests
 
-### Setup Steps
+```bash
+dotnet test
+```
 
-1. **Start IBM MQ with Docker**
-   ```bash
-   docker run --name ibm-mq \
-     -e LICENSE=accept \
-     -e MQ_QMGR_NAME=CALC_QM \
-     -e MQ_APP_PASSWORD=passw0rd \
-     -p 1414:1414 \
-     -p 9443:9443 \
-     -d ibmcom/mq:latest
-   ```
+The test suite includes comprehensive unit tests for all calculation operations and edge cases.
 
-2. **Setup IBM MQ Queues**
-   ```bash
-   docker exec -it ibm-mq runmqsc CALC_QM
-   ```
-   ```
-   DEFINE QLOCAL(CALC.REQUEST) MAXDEPTH(5000)
-   DEFINE QLOCAL(CALC.RESPONSE) MAXDEPTH(5000)
-   DEFINE CHANNEL(CALC.SVRCONN) CHLTYPE(SVRCONN)
-   SET CHLAUTH(CALC.SVRCONN) TYPE(ADDRESSMAP) ADDRESS(*) USERSRC(CHANNEL)
-   START LISTENER(SYSTEM.DEFAULT.LISTENER.TCP)
-   ```
+## 🐛 Troubleshooting
 
-3. **Restore and Build**
-   ```bash
-   dotnet restore
-   dotnet build
-   ```
+### IBM MQ Connection Issues
 
-4. **Run Tests**
-   ```bash
-   dotnet test
-   ```
+**Error 2035 (MQRC_NOT_AUTHORIZED)**
+- **Cause**: Insufficient permissions to access queues
+- **Solution**: Re-run the setup script: `.\docker\setup-ibmmq.ps1` (Windows) or `./docker/setup-ibmmq.sh` (Linux/Mac)
+- **Alternative**: The script grants permissions to your current Windows user. If connecting as a different user, update the script with the correct username.
 
-5. **Start Server**
-   ```bash
-   cd Calculator.Server
-   dotnet run
-   ```
+**Error 2059 (MQRC_Q_MGR_NOT_AVAILABLE)**
+- **Cause**: IBM MQ container not running or not ready
+- **Solution**: 
+  ```bash
+  docker ps  # Check if calculator-ibm-mq is running and healthy
+  docker logs calculator-ibm-mq  # Check for startup errors
+  ```
 
-6. **Start Client**
-   ```bash
-   cd Calculator.Client
-   dotnet run
-   ```
+**Error 2085 (MQRC_UNKNOWN_OBJECT_NAME)**
+- **Cause**: Queues don't exist
+- **Solution**: Run the setup script to create queues
+
+### Fresh Setup
+
+If you encounter persistent issues, do a complete cleanup and restart:
+
+**Windows (PowerShell):**
+```powershell
+# Stop and remove everything including volumes
+docker-compose down -v
+
+# Start IBM MQ
+docker-compose up -d ibm-mq
+
+# Wait 30 seconds for MQ to initialize
+Start-Sleep -Seconds 30
+
+# Run setup script
+.\docker\setup-ibmmq.ps1
+
+# Start applications
+cd Calculator.Server; dotnet run
+```
+
+**Linux/Mac (Bash):**
+```bash
+# Stop and remove everything including volumes
+docker-compose down -v
+
+# Start IBM MQ
+docker-compose up -d ibm-mq
+
+# Wait for MQ to initialize
+sleep 30
+
+# Run setup script
+./docker/setup-ibmmq.sh
+
+# Start applications
+cd Calculator.Server && dotnet run
+```
+
+## 📋 What Gets Created
+
+### On First Setup
+
+When you run the setup script, it creates:
+
+1. **Queues**:
+   - `CALC.REQUEST` - Server consumes calculation requests from here
+   - `CALC.RESPONSE` - Client receives results from here
+
+2. **Security Configuration**:
+   - Channel authentication for `DEV.APP.SVRCONN`
+   - Queue permissions for your user account
+   - Connection authentication set to OPTIONAL for development
+
+3. **Docker Volume**:
+   - `calculatoribmmq_mq-data` - Persists queue manager data
+   - Queues and configuration survive container restarts
+   - Only deleted with `docker-compose down -v`
+
+### On Container Restart
+
+- ✅ Queue Manager automatically starts
+- ✅ Queues are loaded from the volume (no recreation needed)
+- ✅ Channel `DEV.APP.SVRCONN` exists (created by `MQ_DEV=true`)
+- ⚠️ **Permissions may need to be reapplied** - Run the setup script if you get error 2035
 
 ## IBM MQ Setup
 
