@@ -51,6 +51,11 @@ public class IBMMQConfiguration
     public int ConnectionTimeout { get; set; } = 30000;
 
     /// <summary>
+    /// Whether to use SSL/TLS connection
+    /// </summary>
+    public bool? UseSSL { get; set; } = false;
+
+    /// <summary>
     /// Application name for identification
     /// </summary>
     public string ApplicationName { get; set; } = string.Empty;

@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  ibm-mq:
+    image: ibmcom/mq:latest
+    container_name: calculator-ibm-mq
+    ports:
+      - "1414:1414"    # MQ Port
+      - "9443:9443"    # MQ Console (HTTPS)
+      - "9157:9157"    # MQ Metrics
+    environment:
+      - LICENSE=accept
+      - MQ_QMGR_NAME=CALC_QM
+      - MQ_APP_PASSWORD=passw0rd
+      - MQ_ENABLE_METRICS=true
+    volumes:
+      - ./docker/mq-config:/etc/mqm
+      - ./docker/mq-scripts:/opt/mqm/scripts
+      - mq-data:/mnt/mqm
+    networks:
+      - calculator-network
+    healthcheck:
+      test: ["CMD", "dspmq", "-m", "CALC_QM"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    command: >
+      sh -c "
+        /opt/mqm/bin/runmqserver &
+        sleep 30 &&
+        /opt/mqm/scripts/init-calculator-mq.sh &&
+        wait
+      "
+
+  calculator-server:
+    build:
+      context: .
+      dockerfile: Calculator.Server/Dockerfile
+    container_name: calculator-server
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      ibm-mq:
+        condition: service_healthy
+    networks:
+      - calculator-network
+
+  calculator-client:
+    build:
+      context: .
+      dockerfile: Calculator.Client/Dockerfile
+    container_name: calculator-client
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+    depends_on:
+      ibm-mq:
+        condition: service_healthy
+      calculator-server:
+        condition: service_started
+    networks:
+      - calculator-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  mq-data:
+    driver: local
+
+networks:
+  calculator-network:
+    driver: bridge

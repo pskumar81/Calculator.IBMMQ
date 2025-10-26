@@ -1,0 +1,61 @@
+# IBM MQ Configuration for Calculator Application
+# This file contains Queue Manager configuration
+
+# Queue Manager Configuration
+QMGR:
+  Name: CALC_QM
+  Description: Queue Manager for Calculator Application
+  DeadLetterQueue: CALC.DEAD.LETTER
+  MaxChannels: 100
+  MaxActiveChannels: 100
+
+# Channel Configuration  
+CHANNELS:
+  - Name: CALC.SVRCONN
+    Type: SVRCONN
+    Description: Server Connection Channel for Calculator
+    MaxInstances: 10
+    MaxInstancesPerClient: 5
+
+# Queue Configuration
+QUEUES:
+  - Name: CALC.REQUEST
+    Type: LOCAL
+    Description: Queue for calculation requests
+    MaxDepth: 5000
+    MaxMsgLength: 4194304
+    
+  - Name: CALC.RESPONSE  
+    Type: LOCAL
+    Description: Queue for calculation responses
+    MaxDepth: 5000
+    MaxMsgLength: 4194304
+    
+  - Name: CALC.DEAD.LETTER
+    Type: LOCAL
+    Description: Dead letter queue for failed messages
+    MaxDepth: 5000
+    MaxMsgLength: 4194304
+
+# Security Configuration
+SECURITY:
+  - Channel: CALC.SVRCONN
+    Rules:
+      - Type: ADDRESSMAP
+        Address: "*"
+        UserSource: CHANNEL
+        CheckClient: ASQMGR
+        
+# Application User Permissions
+PERMISSIONS:
+  - Principal: app
+    QueueManager:
+      - CONNECT
+      - INQ
+    Queues:
+      Pattern: "CALC.*"
+      Access:
+        - BROWSE
+        - GET  
+        - INQ
+        - PUT

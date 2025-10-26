@@ -22,8 +22,21 @@ public static class ServiceCollectionExtensions
         // Register configuration
         services.Configure<IBMMQConfiguration>(configuration.GetSection("IBMMQ"));
 
+        // Check if we should use real IBM MQ or simulation
+        var useRealIBMMQ = configuration.GetValue<bool>("UseRealIBMMQ", true);
+
+        if (useRealIBMMQ)
+        {
+            // Register hybrid IBM MQ service (real configuration, simulated messaging for now)
+            services.AddSingleton<IIBMMQConnectionService, HybridIBMMQConnectionService>();
+        }
+        else
+        {
+            // Register fully simulated IBM MQ services for testing
+            services.AddSingleton<IIBMMQConnectionService, IBMMQConnectionService>();
+        }
+
         // Register core services
-        services.AddSingleton<IIBMMQConnectionService, IBMMQConnectionService>();
         services.AddSingleton<ICalculatorService, CalculatorService>();
         services.AddSingleton<IIBMMQConsumerService, IBMMQConsumerService>();
 
