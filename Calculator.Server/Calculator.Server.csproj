@@ -14,8 +14,4 @@
     <PackageReference Include="IBMMQDotnetClient" Version="9.4.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Calculator.Shared\Calculator.Shared.csproj" />
-  </ItemGroup>
-
 </Project>

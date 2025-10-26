@@ -8,7 +8,6 @@ WORKDIR /src
 
 # Copy project files
 COPY ["Calculator.Client/Calculator.Client.csproj", "Calculator.Client/"]
-COPY ["Calculator.Shared/Calculator.Shared.csproj", "Calculator.Shared/"]
 
 # Restore dependencies
 RUN dotnet restore "Calculator.Client/Calculator.Client.csproj"
