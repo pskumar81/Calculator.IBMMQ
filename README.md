@@ -114,7 +114,94 @@ The solution consists of three main projects:
 - **Password**: `passw0rd`
 - Monitor queues, messages, and connections in real-time
 
-## 🔧 Configuration
+## � Docker Containerization
+
+The entire application stack (IBM MQ, Server, and Client) can be run in Docker containers.
+
+### Build and Run All Services
+
+```bash
+# Build and start all services
+docker-compose up -d
+
+# View logs
+docker logs calculator-server
+docker logs calculator-ibm-mq
+
+# Stop all services
+docker-compose down
+```
+
+### Run Client Interactively in Docker
+
+```bash
+# Start IBM MQ and Server
+docker-compose up -d ibm-mq calculator-server
+
+# Run client interactively
+docker-compose run --rm calculator-client
+```
+
+### What's Included in Docker Setup
+
+- **IBM MQ Container**: Pre-configured with `CALC_QM` queue manager, queues, and channels
+- **Server Container**: Background service processing calculations
+- **Client Container**: Interactive console application
+- **Network**: All containers connected via `calculator-network` bridge
+- **Automatic Configuration**: Uses `appsettings.Docker.json` for container-specific settings
+
+### Docker Configuration Details
+
+The Docker setup includes:
+
+**Environment Variables:**
+- `ASPNETCORE_ENVIRONMENT=Docker` - Loads `appsettings.Docker.json`
+- `DOTNET_ENVIRONMENT=Docker` - For .NET Host applications
+- `MQ_DEV=true` - IBM MQ development mode with relaxed authentication
+
+**Container Network:**
+- Server connects to IBM MQ at `calculator-ibm-mq:1414`
+- Uses `DEV.APP.SVRCONN` channel (no credentials required in dev mode)
+- Health checks ensure IBM MQ is ready before starting dependent services
+
+**Port Mappings:**
+- `1414` - IBM MQ messaging port
+- `9443` - IBM MQ web console (HTTPS)
+- `9157` - IBM MQ metrics
+- `5001` - Calculator server (HTTP)
+
+### Rebuilding Docker Images
+
+If you modify the code, rebuild the images:
+
+```bash
+# Rebuild specific service
+docker-compose build calculator-server
+
+# Rebuild all services without cache
+docker-compose build --no-cache
+
+# Rebuild and restart
+docker-compose up -d --build
+```
+
+### Docker Troubleshooting
+
+**Port Conflicts:**
+- If port 5001 is in use, modify `docker-compose.yml` to use a different port
+- Example: Change `"5001:5000"` to `"5002:5000"`
+
+**Configuration Not Loading:**
+- Ensure `DOTNET_ENVIRONMENT=Docker` is set in `docker-compose.yml`
+- Verify `appsettings.Docker.json` exists in both Client and Server projects
+- Check logs: `docker logs calculator-server --tail 20`
+
+**IBM MQ Connection Issues in Docker:**
+- Verify containers are on the same network: `docker network inspect calculator-network`
+- Check IBM MQ health: `docker ps` (should show "healthy")
+- View IBM MQ logs: `docker logs calculator-ibm-mq`
+
+## �🔧 Configuration
 
 ### IBM MQ Connection Settings
 
