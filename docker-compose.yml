@@ -38,9 +38,10 @@ services:
     container_name: calculator-server
     environment:
       - ASPNETCORE_ENVIRONMENT=Docker
-      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:5000
     ports:
-      - "8080:8080"
+      - "5001:5000"
     depends_on:
       ibm-mq:
         condition: service_healthy
@@ -54,6 +55,7 @@ services:
     container_name: calculator-client
     environment:
       - ASPNETCORE_ENVIRONMENT=Docker
+      - DOTNET_ENVIRONMENT=Docker
     depends_on:
       ibm-mq:
         condition: service_healthy
