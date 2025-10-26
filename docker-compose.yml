@@ -11,11 +11,9 @@ services:
     environment:
       - LICENSE=accept
       - MQ_QMGR_NAME=CALC_QM
-      - MQ_APP_PASSWORD=passw0rd
-      - MQ_ENABLE_METRICS=true
+      - MQ_DEV=true
+      - MQ_ADMIN_PASSWORD=passw0rd
     volumes:
-      - ./docker/mq-config:/etc/mqm
-      - ./docker/mq-scripts:/opt/mqm/scripts
       - mq-data:/mnt/mqm
     networks:
       - calculator-network
@@ -24,7 +22,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 90s
     command: >
       sh -c "
         /opt/mqm/bin/runmqserver &

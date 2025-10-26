@@ -1,22 +1,25 @@
 using Calculator.Server.Models;
 using Calculator.Server.Services.Interfaces;
-using Calculator.Shared;
+using IBM.WMQ;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
+using System.Collections;
 
 namespace Calculator.Server.Services;
 
 /// <summary>
-/// Simulated IBM MQ connection service for demonstration purposes
-/// In a real implementation, this would use actual IBM MQ client libraries
+/// IBM MQ connection service that connects to real IBM MQ when available
+/// Uses IBM MQ Docker container for messaging
 /// </summary>
-public class IBMMQConnectionService : IIBMMQConnectionService
+public class IBMMQConnectionService : IIBMMQConnectionService, IDisposable
 {
     private readonly IBMMQConfiguration _config;
     private readonly ILogger<IBMMQConnectionService> _logger;
     private bool _disposed = false;
     private bool _isConnected = false;
+    
+    private MQQueueManager? _queueManager;
+    private readonly Dictionary<string, MQQueue> _openQueues = new();
 
     public IBMMQConnectionService(IOptions<IBMMQConfiguration> config, ILogger<IBMMQConnectionService> logger)
     {
@@ -28,80 +31,135 @@ public class IBMMQConnectionService : IIBMMQConnectionService
 
     public async Task ConnectAsync()
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(IBMMQConnectionService));
+
         try
         {
             if (_isConnected)
             {
-                _logger.LogDebug("Already connected to simulated IBM MQ");
+                _logger.LogDebug("Already connected to IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
                 return;
             }
 
-            _logger.LogInformation("Connecting to simulated IBM MQ Queue Manager: {QueueManager} at {Host}:{Port}",
-                _config.QueueManagerName, _config.HostName, _config.Port);
+            _logger.LogInformation("Connecting to IBM MQ Queue Manager: {QueueManager} at {Host}:{Port} via {Channel}",
+                _config.QueueManagerName, _config.HostName, _config.Port, _config.Channel);
 
-            // Simulate connection delay
-            await Task.Delay(100);
+            _logger.LogInformation("Using credentials: User={User}, SSL={UseSSL}", 
+                _config.UserName ?? "None", _config.UseSSL);
+
+            _logger.LogInformation("Target queues: Request={RequestQueue}, Response={ResponseQueue}",
+                _config.RequestQueueName, _config.ResponseQueueName);
+
+            // Create connection properties
+            var properties = new Hashtable
+            {
+                { MQC.TRANSPORT_PROPERTY, MQC.TRANSPORT_MQSERIES_MANAGED },
+                { MQC.HOST_NAME_PROPERTY, _config.HostName },
+                { MQC.PORT_PROPERTY, _config.Port },
+                { MQC.CHANNEL_PROPERTY, _config.Channel }
+            };
+
+            if (!string.IsNullOrEmpty(_config.UserName))
+            {
+                properties.Add(MQC.USER_ID_PROPERTY, _config.UserName);
+                if (!string.IsNullOrEmpty(_config.Password))
+                {
+                    properties.Add(MQC.PASSWORD_PROPERTY, _config.Password);
+                }
+            }
+
+            // Connect to Queue Manager
+            _queueManager = new MQQueueManager(_config.QueueManagerName, properties);
 
             _isConnected = true;
-
-            _logger.LogInformation("Successfully connected to simulated IBM MQ Queue Manager: {QueueManager}",
-                _config.QueueManagerName);
+            _logger.LogInformation("✅ Successfully connected to IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
+            _logger.LogInformation("📋 Ready to process messages on queues: {RequestQueue} -> {ResponseQueue}",
+                _config.RequestQueueName, _config.ResponseQueueName);
+            
+            await Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error connecting to simulated IBM MQ");
+            _logger.LogError(ex, "❌ Failed to connect to IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
             throw;
         }
     }
 
     public async Task DisconnectAsync()
     {
+        if (_disposed)
+            return;
+
         try
         {
             if (_isConnected)
             {
-                _isConnected = false;
-                _logger.LogInformation("Disconnected from simulated IBM MQ Queue Manager: {QueueManager}",
-                    _config.QueueManagerName);
-            }
+                _logger.LogInformation("Disconnecting from IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
+                
+                // Close all open queues
+                foreach (var queue in _openQueues.Values)
+                {
+                    try
+                    {
+                        queue.Close();
+                    }
+                    catch (Exception qex)
+                    {
+                        _logger.LogWarning(qex, "Error closing queue");
+                    }
+                }
+                _openQueues.Clear();
 
+                // Disconnect from queue manager
+                _queueManager?.Disconnect();
+                _queueManager = null;
+                
+                _isConnected = false;
+                _logger.LogInformation("✅ Disconnected from IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
+            }
+            
             await Task.CompletedTask;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error disconnecting from simulated IBM MQ");
+            _logger.LogError(ex, "❌ Error disconnecting from IBM MQ Queue Manager: {QueueManager}", _config.QueueManagerName);
         }
     }
 
     public void SendMessage(string queueName, string message)
     {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(IBMMQConnectionService));
+
+        if (!_isConnected)
+            throw new InvalidOperationException("Not connected to IBM MQ Queue Manager");
+
         try
         {
-            if (!_isConnected)
+            _logger.LogDebug("📤 Sending message to queue: {QueueName} (Length: {Length})", queueName, message.Length);
+
+            // Open the queue for output if not already open
+            if (!_openQueues.ContainsKey(queueName))
             {
-                throw new InvalidOperationException("Not connected to IBM MQ Queue Manager");
+                int openOptions = MQC.MQOO_OUTPUT | MQC.MQOO_FAIL_IF_QUIESCING;
+                var queue = _queueManager!.AccessQueue(queueName, openOptions);
+                _openQueues[queueName] = queue;
             }
 
-            _logger.LogDebug("Sending message to queue: {QueueName}", queueName);
+            // Create and send the message
+            var mqMessage = new MQMessage();
+            mqMessage.WriteString(message);
+            mqMessage.Format = MQC.MQFMT_STRING;
 
-            if (queueName == _config.RequestQueueName)
-            {
-                SimulatedIBMMQQueues.RequestQueue.Enqueue(message);
-            }
-            else if (queueName == _config.ResponseQueueName)
-            {
-                SimulatedIBMMQQueues.ResponseQueue.Enqueue(message);
-            }
-            else
-            {
-                throw new InvalidOperationException($"Unknown queue: {queueName}");
-            }
+            var putMessageOptions = new MQPutMessageOptions();
+            _openQueues[queueName].Put(mqMessage, putMessageOptions);
 
-            _logger.LogDebug("Successfully sent message to queue: {QueueName}", queueName);
+            _logger.LogDebug("✅ Message sent to queue: {QueueName}", queueName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send message to queue {QueueName}", queueName);
+            _logger.LogError(ex, "❌ Failed to send message to queue: {QueueName}", queueName);
             throw;
         }
     }
@@ -110,49 +168,82 @@ public class IBMMQConnectionService : IIBMMQConnectionService
     {
         message = null;
 
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(IBMMQConnectionService));
+
+        if (!_isConnected)
+            throw new InvalidOperationException("Not connected to IBM MQ Queue Manager");
+
         try
         {
-            if (!_isConnected)
+            _logger.LogDebug("📥 Checking for messages on queue: {QueueName}", queueName);
+
+            // Open the queue for input if not already open
+            if (!_openQueues.ContainsKey(queueName))
             {
-                throw new InvalidOperationException("Not connected to IBM MQ Queue Manager");
+                _logger.LogDebug("Opening queue {QueueName} for input", queueName);
+                int openOptions = MQC.MQOO_INPUT_AS_Q_DEF | MQC.MQOO_FAIL_IF_QUIESCING;
+                var queue = _queueManager!.AccessQueue(queueName, openOptions);
+                _openQueues[queueName] = queue;
+                _logger.LogDebug("Queue {QueueName} opened successfully", queueName);
             }
 
-            if (queueName == _config.RequestQueueName)
+            // Try to get a message with no wait
+            var mqMessage = new MQMessage();
+            var getMessageOptions = new MQGetMessageOptions
             {
-                return SimulatedIBMMQQueues.RequestQueue.TryDequeue(out message);
+                Options = MQC.MQGMO_NO_WAIT | MQC.MQGMO_FAIL_IF_QUIESCING
+            };
+
+            try
+            {
+                _openQueues[queueName].Get(mqMessage, getMessageOptions);
+                message = mqMessage.ReadString(mqMessage.MessageLength);
+                _logger.LogDebug("✅ Message received from queue: {QueueName} (Length: {Length})", queueName, message.Length);
+                return true;
             }
-            else if (queueName == _config.ResponseQueueName)
+            catch (MQException mqEx)
             {
-                return SimulatedIBMMQQueues.ResponseQueue.TryDequeue(out message);
-            }
-            else
-            {
-                throw new InvalidOperationException($"Unknown queue: {queueName}");
+                // MQRC_NO_MSG_AVAILABLE means no messages - this is expected
+                if (mqEx.ReasonCode == MQC.MQRC_NO_MSG_AVAILABLE)
+                {
+                    return false;
+                }
+                throw;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to receive message from queue {QueueName}", queueName);
+            _logger.LogError(ex, "❌ Failed to receive message from queue: {QueueName}", queueName);
             throw;
         }
     }
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
-        try
-        {
-            DisconnectAsync().Wait(TimeSpan.FromSeconds(5));
-            _logger.LogInformation("IBM MQ connection service disposed");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error disposing IBM MQ connection service");
-        }
-        finally
-        {
-            _disposed = true;
-        }
+        _logger.LogInformation("🔄 Disposing IBM MQ connection service");
+        DisconnectAsync().Wait();
+        _disposed = true;
     }
 }
+
+/*
+ * NEXT STEPS FOR REAL IBM MQ INTEGRATION:
+ * 
+ * 1. Study IBMMQDotnetClient package documentation
+ * 2. Replace simulation queues with real IBM.MQ calls
+ * 3. Add proper error handling for IBM MQ specific errors
+ * 4. Implement connection pooling and retry logic
+ * 5. Add SSL/TLS support
+ * 6. Add transaction support for message processing
+ * 
+ * Current implementation provides:
+ * ✅ Proper logging and configuration handling
+ * ✅ Interface compliance
+ * ✅ Error handling structure
+ * ✅ Connection lifecycle management
+ * ✅ Foundation for real IBM MQ integration
+ */
