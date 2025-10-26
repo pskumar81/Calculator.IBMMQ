@@ -45,7 +45,7 @@ public class CalculatorService : ICalculatorService
 
             return await Task.FromResult(response);
         }
-        catch (DivideByZeroException ex)
+        catch (DivideByZeroException)
         {
             _logger.LogWarning("Division by zero attempted, CorrelationId: {CorrelationId}", request.CorrelationId);
             

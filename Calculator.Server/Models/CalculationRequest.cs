@@ -14,22 +14,22 @@ public class CalculationRequest
     public string CorrelationId { get; set; } = string.Empty;
 
     /// <summary>
-    /// The operation to perform: "Add", "Subtract", "Multiply", "Divide"
+    /// The operation to perform
     /// </summary>
     [JsonPropertyName("operation")]
-    public string Operation { get; set; } = string.Empty;
+    public CalculationOperation Operation { get; set; }
 
     /// <summary>
     /// The first number for the calculation
     /// </summary>
-    [JsonPropertyName("number1")]
-    public double Number1 { get; set; }
+    [JsonPropertyName("operand1")]
+    public double Operand1 { get; set; }
 
     /// <summary>
     /// The second number for the calculation
     /// </summary>
-    [JsonPropertyName("number2")]
-    public double Number2 { get; set; }
+    [JsonPropertyName("operand2")]
+    public double Operand2 { get; set; }
 
     /// <summary>
     /// The queue name where the response should be sent

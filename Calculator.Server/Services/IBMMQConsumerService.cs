@@ -63,7 +63,8 @@ public class IBMMQConsumerService : IIBMMQConsumerService
                 try
                 {
                     // Poll for messages
-                    if (_connectionService.TryReceiveMessage(_config.RequestQueueName, out string? messageText))
+                    if (_connectionService.TryReceiveMessage(_config.RequestQueueName, out string? messageText) && 
+                        messageText != null)
                     {
                         await ProcessMessage(messageText);
                     }

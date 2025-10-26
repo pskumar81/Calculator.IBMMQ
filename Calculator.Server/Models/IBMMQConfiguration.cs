@@ -18,7 +18,16 @@ public class IBMMQConfiguration
     /// <summary>
     /// Queue manager name
     /// </summary>
-    public string QueueManager { get; set; } = "QM1";
+    public string QueueManagerName { get; set; } = "QM1";
+
+    /// <summary>
+    /// Alternative property name for compatibility
+    /// </summary>
+    public string QueueManager
+    {
+        get => QueueManagerName;
+        set => QueueManagerName = value;
+    }
 
     /// <summary>
     /// Channel name for connection
@@ -44,6 +53,11 @@ public class IBMMQConfiguration
     /// Name of the response queue prefix (will be appended with client ID)
     /// </summary>
     public string ResponseQueuePrefix { get; set; } = "DEV.QUEUE.RESPONSE";
+
+    /// <summary>
+    /// Complete response queue name
+    /// </summary>
+    public string ResponseQueueName { get; set; } = "DEV.QUEUE.RESPONSE";
 
     /// <summary>
     /// Request timeout in milliseconds
